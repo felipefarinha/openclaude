@@ -53,6 +53,7 @@ import {
   isCloudflareBaseUrl,
   isClinePassBaseUrl,
   isFireworksBaseUrl,
+  isLongcatBaseUrl,
   isNearaiBaseUrl,
   isXaiBaseUrl,
   isXiaomiMimoBaseUrl,
@@ -226,18 +227,15 @@ function resolveProfileCapabilityRouteId(
     return routeIdFromBaseUrl
   }
 
-  // A cloudflare profile retargeted away from the real Workers AI endpoint
-  // (e.g. to gateway.ai.cloudflare.com or another OpenAI-compatible host) is
-  // run generically at runtime — resolveActiveRouteIdFromEnv no longer resolves
-  // it to the cloudflare route. Mirror that boundary here so capability-driven
-  // surfaces (apiFormat, custom auth headers, custom request headers) are not
-  // stripped based on the stale cloudflare route id. Keep the cloudflare route
-  // only when the base URL is the real Workers AI URL (already handled above) or
-  // unset (the descriptor default); any other base URL falls back to generic.
+  // Cloudflare and LongCat profiles retargeted away from their dedicated
+  // endpoints run generically at runtime. Mirror that boundary here so
+  // capability-driven surfaces are not stripped based on stale route ids.
   if (
-    providerRouteId === 'cloudflare' &&
+    (providerRouteId === 'cloudflare' || providerRouteId === 'longcat') &&
     baseUrl &&
-    !isCloudflareBaseUrl(baseUrl)
+    !(providerRouteId === 'cloudflare'
+      ? isCloudflareBaseUrl(baseUrl)
+      : isLongcatBaseUrl(baseUrl))
   ) {
     return 'custom'
   }
@@ -811,6 +809,10 @@ function isProcessEnvAlignedWithProfile(
       ? !includeApiKey ||
         sameOptionalEnvValue(processEnv.FIREWORKS_API_KEY, profile.apiKey)
       : true) &&
+    (isLongcatBaseUrl(profile.baseUrl)
+      ? !includeApiKey ||
+        sameOptionalEnvValue(processEnv.LONGCAT_API_KEY, profile.apiKey)
+      : true) &&
     (isCloudflareBaseUrl(profile.baseUrl)
       ? !includeApiKey ||
         sameOptionalEnvValue(processEnv.CLOUDFLARE_API_TOKEN, profile.apiKey)
@@ -1020,6 +1022,9 @@ export function applyProviderProfileToProcessEnv(
       }
       if (route.routeId === 'fireworks' || isFireworksBaseUrl(profile.baseUrl)) {
         openAIProfileEnv.FIREWORKS_API_KEY = profile.apiKey
+      }
+      if (isLongcatBaseUrl(profile.baseUrl)) {
+        openAIProfileEnv.LONGCAT_API_KEY = profile.apiKey
       }
       // Gate on the Workers AI path predicate (isCloudflareBaseUrl: exact
       // api.cloudflare.com host AND the `/client/v4/accounts/<id>/ai/v1` path),
@@ -1373,6 +1378,9 @@ function buildOpenAICompatibleStartupEnv(
       if (isFireworksBaseUrl(activeProfile.baseUrl)) {
         strictEnv.FIREWORKS_API_KEY = activeProfile.apiKey
       }
+      if (isLongcatBaseUrl(activeProfile.baseUrl)) {
+        strictEnv.LONGCAT_API_KEY = activeProfile.apiKey
+      }
       // Cloudflare's transport reads the dedicated CLOUDFLARE_API_TOKEN; mirror
       // it like nearai/fireworks, but only when the base URL is a real Workers
       // AI endpoint per the isCloudflareBaseUrl path predicate (exact
@@ -1438,6 +1446,9 @@ function buildOpenAICompatibleStartupEnv(
     }
     if (isFireworksBaseUrl(activeProfile.baseUrl)) {
       env.FIREWORKS_API_KEY = activeProfile.apiKey
+    }
+    if (isLongcatBaseUrl(activeProfile.baseUrl)) {
+      env.LONGCAT_API_KEY = activeProfile.apiKey
     }
     // Cloudflare Workers AI authenticates over the generic OpenAI-compatible
     // header, so mirror the saved key into CLOUDFLARE_API_TOKEN only when the

@@ -25,6 +25,7 @@ import { getErrnoCode } from './errors.js'
 import {
   getRouteDefaultBaseUrl,
   getRouteDefaultModel,
+  isLongcatBaseUrl,
   normalizeXiaomiMimoBaseUrl,
   resolveRouteCredentialValue,
   resolveRouteIdFromBaseUrl,
@@ -112,6 +113,7 @@ const PROFILE_ENV_KEYS = [
   'ATLAS_CLOUD_API_KEY',
   'NEARAI_API_KEY',
   'FIREWORKS_API_KEY',
+  'LONGCAT_API_KEY',
   'CLINE_API_KEY',
   'OPENCODE_API_KEY',
   'CLAUDE_CODE_PROVIDER_ROUTE_ID',
@@ -197,6 +199,7 @@ export type ProfileEnv = {
   CLINE_API_KEY?: string
   NEARAI_API_KEY?: string
   FIREWORKS_API_KEY?: string
+  LONGCAT_API_KEY?: string
   OPENCODE_API_KEY?: string
   CLOUDFLARE_API_TOKEN?: string
   CLAUDE_CODE_OPENAI_CONTEXT_WINDOWS?: string
@@ -1346,7 +1349,8 @@ function hasConcreteProviderSelection(
   // Env-only provider setups — no CLAUDE_CODE_USE_* flag needed
   return (
     sanitizeApiKey(processEnv.FIREWORKS_API_KEY) !== undefined ||
-    sanitizeApiKey(processEnv.NEARAI_API_KEY) !== undefined
+    sanitizeApiKey(processEnv.NEARAI_API_KEY) !== undefined ||
+    sanitizeApiKey(processEnv.LONGCAT_API_KEY) !== undefined
   )
 }
 
@@ -2045,6 +2049,7 @@ export async function buildLaunchEnv(options: {
     'ATLAS_CLOUD_API_KEY',
     'NEARAI_API_KEY',
     'FIREWORKS_API_KEY',
+    'LONGCAT_API_KEY',
     'AIMLAPI_API_KEY',
     'MIMO_API_KEY',
     'NVIDIA_API_KEY',
@@ -2058,6 +2063,12 @@ export async function buildLaunchEnv(options: {
       continue
     }
     if (dedicatedKey === 'NVIDIA_API_KEY' && effectiveOpenAIRouteId !== 'nvidia-nim') {
+      continue
+    }
+    if (
+      dedicatedKey === 'LONGCAT_API_KEY' &&
+      (effectiveOpenAIRouteId !== 'longcat' || !isLongcatBaseUrl(env.OPENAI_BASE_URL))
+    ) {
       continue
     }
     // On a non-canonical (proxy) aimlapi base URL, never source AIMLAPI_API_KEY
